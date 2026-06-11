@@ -1,0 +1,5 @@
+{
+  "id": "python-001-async-vs-threads",
+  "question": "When should I use asyncio in Python instead of threads?",
+  "reference_answer": "Asyncio is best for I/O-bound workloads with many concurrent operations, such as network calls, database queries, or file I/O. Threads carry per-thread memory overhead and context-switch costs, while asyncio coroutines are lightweight and scheduled by an event loop. For CPU-bound work, neither asyncio nor threads help in CPython because of the GIL; use multiprocessing instead."
+}

@@ -1,0 +1,5 @@
+{
+  "id": "fastapi-001-dependency-injection",
+  "question": "How does dependency injection work in FastAPI?",
+  "reference_answer": "FastAPI provides dependency injection through the Depends() function. You declare a parameter with Depends(callable) and FastAPI will call that callable for each request, passing the result into your endpoint. Dependencies can themselves declare further dependencies, forming a tree that FastAPI resolves automatically. Dependencies are cached per request by default so the same callable isn't invoked twice in a single request."
+}
