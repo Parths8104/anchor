@@ -57,16 +57,16 @@ def main() -> int:
     for c in answer.citations:
         snippet = c.text[:120].replace("\n", " ")
         print(f"  [{c.index}] {c.chunk_id}: {snippet}...")
-   print("\nDIAGNOSTICS:")
-    print(f"  dense retrieved : {retrieval.dense_count}")
-    print(f"  bm25 retrieved  : {retrieval.bm25_count}")
-    print(f"  chunks used     : {len(retrieval.chunks)}")
-    print(f"  prompt tokens   : {answer.prompt_tokens}")
-    print(f"  completion tok. : {answer.completion_tokens}")
-    print(f"  model           : {answer.model}")
-    generation_cost = cost_for(answer.model, answer.prompt_tokens, answer.completion_tokens)
-    print(f"  est. cost (USD) : ${generation_cost:.6f}")
-    return 0
+    print("\nDIAGNOSTICS:")
+     print(f"  dense retrieved : {retrieval.dense_count}")
+     print(f"  bm25 retrieved  : {retrieval.bm25_count}")
+     print(f"  chunks used     : {len(retrieval.chunks)}")
+     print(f"  prompt tokens   : {answer.prompt_tokens}")
+     print(f"  completion tok. : {answer.completion_tokens}")
+     print(f"  model           : {answer.model}")
+     generation_cost = cost_for(answer.model, answer.prompt_tokens, answer.completion_tokens)
+     print(f"  est. cost (USD) : ${generation_cost:.6f}")
+     return 0
 
 
 if __name__ == "__main__":
