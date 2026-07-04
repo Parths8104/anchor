@@ -14,6 +14,23 @@ from anchor.generation.generator import Generator  # noqa: E402
 from anchor.logging_config import configure_logging  # noqa: E402
 from anchor.retrieval.hybrid import HybridRetriever  # noqa: E402
 
+# USD per token, matching OpenAI's public pricing as of mid-2026.
+# Kept as a small local table so this script has no runtime dependency
+# on the main pricing module.
+PRICING = {
+    "gpt-4o-mini": {"input": 0.15 / 1_000_000, "output": 0.60 / 1_000_000},
+    "gpt-4o": {"input": 2.50 / 1_000_000, "output": 10.00 / 1_000_000},
+    "text-embedding-3-small": {"input": 0.02 / 1_000_000, "output": 0.0},
+}
+
+
+def cost_for(model: str, prompt_tokens: int, completion_tokens: int) -> float:
+    """Estimate USD cost for one LLM call. Returns 0 if model isn't priced."""
+    rates = PRICING.get(model)
+    if rates is None:
+        return 0.0
+    return prompt_tokens * rates["input"] + completion_tokens * rates["output"]
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Ask Anchor a question.")
@@ -40,12 +57,15 @@ def main() -> int:
     for c in answer.citations:
         snippet = c.text[:120].replace("\n", " ")
         print(f"  [{c.index}] {c.chunk_id}: {snippet}...")
-    print("\nDIAGNOSTICS:")
+   print("\nDIAGNOSTICS:")
     print(f"  dense retrieved : {retrieval.dense_count}")
     print(f"  bm25 retrieved  : {retrieval.bm25_count}")
     print(f"  chunks used     : {len(retrieval.chunks)}")
     print(f"  prompt tokens   : {answer.prompt_tokens}")
     print(f"  completion tok. : {answer.completion_tokens}")
+    print(f"  model           : {answer.model}")
+    generation_cost = cost_for(answer.model, answer.prompt_tokens, answer.completion_tokens)
+    print(f"  est. cost (USD) : ${generation_cost:.6f}")
     return 0
 
 
