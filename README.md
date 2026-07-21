@@ -2,6 +2,94 @@
 
 > Production-grade RAG with citation tracing and evaluation-first design.
 
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
+
+## Architecture at a glance
+
+```mermaid
+flowchart TB
+    subgraph Ingestion["📥 Ingestion"]
+        A[Markdown / Text Docs] --> B[TokenChunker<br/>tiktoken · 512 tokens · 64 overlap]
+        B --> C[Embedder<br/>OpenAI text-embedding-3-small]
+    end
+
+    C --> D[(Vector Store<br/>ChromaDB)]
+    B --> E[(BM25 Index<br/>rank-bm25)]
+
+    subgraph Retrieval["🔍 Retrieval"]
+        F[User Question] --> G[Embed query]
+        G --> H[Dense search<br/>cosine similarity]
+        F --> I[Sparse search<br/>BM25 scoring]
+        H --> J[Reciprocal Rank Fusion<br/>k=60]
+        I --> J
+    end
+
+    D -.retrieves.-> H
+    E -.retrieves.-> I
+
+    subgraph Generation["✍️ Generation"]
+        J --> K[Format context<br/>with numbered passages]
+        K --> L[LLM Call<br/>gpt-4o-mini]
+        L --> M[Citation Parser<br/>bracketed indices]
+        M --> N[Cited Answer]
+    end
+
+    N --> O{Eval Harness}
+    O -.scores.-> P[Similarity]
+    O -.scores.-> Q[Groundedness<br/>LLM-as-judge]
+    O -.scores.-> R[Citation Coverage]
+
+    style A fill:#e1f5ff,stroke:#333,color:#000
+    style N fill:#d4edda,stroke:#333,color:#000
+    style D fill:#fff3cd,stroke:#333,color:#000
+    style E fill:#fff3cd,stroke:#333,color:#000
+```
+
+## How a query flows through the system
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant API as FastAPI
+    participant R as HybridRetriever
+    participant V as VectorStore
+    participant B as BM25Index
+    participant G as Generator
+    participant L as OpenAI LLM
+
+    U->>API: POST /query { question }
+    API->>R: retrieve(question)
+    R->>R: embed(question)
+    par Dense retrieval
+        R->>V: query(embedding, k=10)
+        V-->>R: top chunks by cosine
+    and Sparse retrieval
+        R->>B: query(question, k=10)
+        B-->>R: top chunks by BM25
+    end
+    R->>R: RRF fusion → top 4
+    R-->>API: 4 fused chunks
+    API->>G: generate(question, chunks)
+    G->>L: chat completion with cited context
+    L-->>G: answer with [1], [2] citations
+    G->>G: parse citations → structured refs
+    G-->>API: answer + citations + tokens
+    API-->>U: JSON { answer, citations, diagnostics }
+```
+
+## Why hybrid retrieval?
+
+Dense embeddings catch semantic similarity but miss exact terms — acronyms, function names, error strings. BM25 catches those. Fusing both via RRF gives noticeably better recall on technical docs than either alone. Full rationale in [ADR-0001](./docs/decisions/0001-hybrid-retrieval.md).
+
+| Query type | Dense-only wins | BM25-only wins | Hybrid wins |
+|---|:---:|:---:|:---:|
+| Paraphrased semantic | ✅ | ❌ | ✅ |
+| Exact keyword / code identifier | ❌ | ✅ | ✅ |
+| Mixed (concept + specific term) | ⚠️ | ⚠️ | ✅ |
+
 Anchor is a retrieval-augmented generation system that answers questions from your documents and **cites the exact passages it used**. Every claim in the answer maps back to a source chunk; claims that can't be grounded trigger an explicit refusal rather than a hallucination.
 
 The system is designed around three principles I wish more RAG implementations took seriously:
