@@ -49,8 +49,8 @@ class Settings(BaseSettings):
         alias="ANCHOR_DENSE_WEIGHT",
         description="Weight of dense scores in hybrid fusion (BM25 weight = 1 - dense_weight).",
     )
-
-        # ------------------------------------------------------------------
+    
+    # ------------------------------------------------------------------
     # Semantic cache
     # ------------------------------------------------------------------
     cache_enabled: bool = Field(
