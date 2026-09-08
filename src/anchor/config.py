@@ -50,6 +50,31 @@ class Settings(BaseSettings):
         description="Weight of dense scores in hybrid fusion (BM25 weight = 1 - dense_weight).",
     )
 
+        # ------------------------------------------------------------------
+    # Semantic cache
+    # ------------------------------------------------------------------
+    cache_enabled: bool = Field(
+        default=True,
+        alias="ANCHOR_CACHE_ENABLED",
+        description="Whether to check the semantic cache before running retrieval + generation.",
+    )
+    cache_max_entries: int = Field(
+        default=1000,
+        alias="ANCHOR_CACHE_MAX_ENTRIES",
+        ge=1,
+        description="Maximum number of cached (query, answer) pairs before LRU eviction kicks in.",
+    )
+    cache_similarity_threshold: float = Field(
+        default=0.95,
+        alias="ANCHOR_CACHE_SIMILARITY_THRESHOLD",
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Cosine similarity threshold for a cache hit. 1.0 means exact match only; "
+            "lower values return cached answers for paraphrased queries."
+        ),
+    )
+
     vector_db_path: Path = Field(default=Path("./.chroma"), alias="ANCHOR_VECTOR_DB_PATH")
     bm25_index_path: Path = Field(default=Path("./.bm25.pkl"), alias="ANCHOR_BM25_INDEX_PATH")
 
