@@ -1,0 +1,5 @@
+{
+  "id": "python-002-exceptions",
+  "question": "What's the problem with using a bare 'except:' clause in Python?",
+  "reference_answer": "A bare 'except:' clause catches all exceptions, including system-exit signals like KeyboardInterrupt and SystemExit, which is why it should be avoided. It's better to catch specific exception types so you don't swallow errors you didn't intend to handle. The 'finally' clause runs whether or not an exception was raised, which makes it the right place for resource cleanup."
+}
