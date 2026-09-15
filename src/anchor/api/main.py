@@ -25,6 +25,8 @@ from anchor.api.schemas import (
     QueryRequest,
     QueryResponse,
 )
+from anchor.cache import SemanticCache
+from anchor.config import get_settings
 from anchor.generation.generator import Generator
 from anchor.ingestion.pipeline import IngestionPipeline
 from anchor.logging_config import configure_logging, get_logger
@@ -39,6 +41,7 @@ class AppState:
     pipeline: IngestionPipeline
     retriever: HybridRetriever
     generator: Generator
+    cache: SemanticCache
 
 
 @asynccontextmanager
@@ -58,6 +61,15 @@ async def lifespan(app: FastAPI):
         embedder=state.pipeline.embedder,
     )
     state.generator = Generator()
+
+    # Semantic cache — check cache before retrieval, populate after generation.
+    # Config knobs live in Settings; disabled cache still creates the object
+    # with max_entries=1 so downstream code doesn't need None-checks.
+    settings = get_settings()
+    state.cache = SemanticCache(
+        max_entries=settings.cache_max_entries if settings.cache_enabled else 1,
+        similarity_threshold=settings.cache_similarity_threshold,
+    )
 
     app.state.singletons = state
     log.info("anchor_ready", indexed_chunks=state.pipeline.vector_store.count())
@@ -91,9 +103,44 @@ async def health() -> HealthResponse:
 @app.post("/query", response_model=QueryResponse, tags=["rag"])
 async def query(req: QueryRequest) -> QueryResponse:
     state = cast(AppState, app.state.singletons)
+    settings = get_settings()
+
     try:
+        # Embed the question once — reused for cache lookup AND (on miss)
+        # for dense retrieval, so we don't pay for two embed calls.
+        question_embedding = state.pipeline.embedder.embed([req.question])[0]
+
+        # Cache check. On hit, return the stored answer without running
+        # retrieval or generation.
+        if settings.cache_enabled:
+            hit = state.cache.get(question_embedding)
+            if hit is not None:
+                log.info(
+                    "cache_hit",
+                    similarity=round(hit.similarity, 4),
+                    cached_query=hit.entry.query_text,
+                )
+                return QueryResponse(
+                    answer=hit.entry.answer,
+                    citations=[],  # cached answers don't re-derive citations
+                    diagnostics={
+                        "cache_hit": "true",
+                        "cache_similarity": f"{hit.similarity:.4f}",
+                        "cached_query": hit.entry.query_text,
+                    },
+                )
+
+        # Cache miss: run the full pipeline.
         retrieval = state.retriever.retrieve(req.question, top_k=req.top_k)
         answer = state.generator.generate(req.question, retrieval.chunks)
+
+        # Populate cache so subsequent similar queries hit.
+        if settings.cache_enabled:
+            state.cache.put(
+                query_text=req.question,
+                query_embedding=question_embedding,
+                answer=answer.answer,
+            )
     except Exception as e:
         log.error("query_failed", error=str(e), error_type=type(e).__name__)
         raise HTTPException(status_code=500, detail="Query failed") from e
@@ -111,15 +158,15 @@ async def query(req: QueryRequest) -> QueryResponse:
             for c in answer.citations
         ],
         diagnostics={
-            "dense_retrieved": retrieval.dense_count,
-            "bm25_retrieved": retrieval.bm25_count,
-            "chunks_used": len(retrieval.chunks),
-            "prompt_tokens": answer.prompt_tokens,
-            "completion_tokens": answer.completion_tokens,
+            "cache_hit": "false",
+            "dense_retrieved": str(retrieval.dense_count),
+            "bm25_retrieved": str(retrieval.bm25_count),
+            "chunks_used": str(len(retrieval.chunks)),
+            "prompt_tokens": str(answer.prompt_tokens),
+            "completion_tokens": str(answer.completion_tokens),
             "model": answer.model,
         },
     )
-
 
 @app.post("/ingest/text", response_model=IngestResponse, tags=["ingestion"])
 async def ingest_text(req: IngestTextRequest) -> IngestResponse:
