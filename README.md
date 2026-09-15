@@ -90,6 +90,22 @@ Dense embeddings catch semantic similarity but miss exact terms — acronyms, fu
 | Exact keyword / code identifier | ❌ | ✅ | ✅ |
 | Mixed (concept + specific term) | ⚠️ | ⚠️ | ✅ |
 
+## Recently added
+
+### Semantic cache (v0.2)
+
+The `/query` endpoint now checks a semantic cache before running retrieval or generation. Queries whose embeddings pass a cosine-similarity threshold against a previously-seen query (default 0.95) return the cached answer immediately — no retrieval, no LLM call.
+
+Key design points, worth expanding in a future ADR:
+
+- **Embed once, use twice.** The question embedding is computed once and reused for both cache lookup and (on miss) dense retrieval. Avoids paying for two embed calls per query.
+- **LRU eviction** with a configurable `max_entries` cap. Backed by an `OrderedDict` — access marks as most-recently-used, insertion beyond capacity evicts the oldest.
+- **Conservative default threshold (0.95).** Strict enough that "how does auth work" won't return a cached answer for "how does the login page render." Loose enough to catch trivial paraphrases (adding "please," singular/plural changes).
+- **In-memory, single-process.** Fine for the current FastAPI worker; multi-worker deployments would need to swap in Redis. The cache interface (`get` / `put`) is deliberately narrow so that swap is a focused change.
+
+Configuration knobs (all `ANCHOR_CACHE_*`): see [`.env.example`](./.env.example).
+Implementation: [`src/anchor/cache.py`](./src/anchor/cache.py) · Tests: [`tests/test_cache.py`](./tests/test_cache.py)
+
 Anchor is a retrieval-augmented generation system that answers questions from your documents and **cites the exact passages it used**. Every claim in the answer maps back to a source chunk; claims that can't be grounded trigger an explicit refusal rather than a hallucination.
 
 The system is designed around three principles I wish more RAG implementations took seriously:
