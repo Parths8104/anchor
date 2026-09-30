@@ -120,6 +120,7 @@ def test_vector_length_mismatch_raises() -> None:
     with pytest.raises(ValueError):
         cache.get([1.0, 0.0])  # length 2 vs stored length 3
 
+
 def test_stats_track_hits_and_misses() -> None:
     cache = SemanticCache(similarity_threshold=0.9)
     cache.put("q1", V1, "answer 1")
