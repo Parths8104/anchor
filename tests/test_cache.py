@@ -119,3 +119,18 @@ def test_vector_length_mismatch_raises() -> None:
 
     with pytest.raises(ValueError):
         cache.get([1.0, 0.0])  # length 2 vs stored length 3
+
+def test_stats_track_hits_and_misses() -> None:
+    cache = SemanticCache(similarity_threshold=0.9)
+    cache.put("q1", V1, "answer 1")
+
+    cache.get(V1)
+    cache.get(V2)
+    cache.get(V1)
+
+    stats = cache.stats()
+
+    assert stats["entries"] == 1
+    assert stats["hits"] == 2
+    assert stats["misses"] == 1
+    assert stats["hit_rate"] == pytest.approx(2 / 3, abs=0.0001)
